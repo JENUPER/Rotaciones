@@ -46,13 +46,32 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Horas en el puesto</label>
-          <select id="horas" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 text-lg bg-white">
-            <option value="4">4 Horas</option>
-            <option value="2">2 Horas</option>
-            <option value="1">1 Hora</option>
-            <option value="8">Turno Completo (8h)</option>
-          </select>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Tiempo en el puesto</label>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Horas</label>
+              <select id="horasSelect" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 text-lg bg-white">
+                <option value="0">0h</option>
+                <option value="1">1h</option>
+                <option value="2">2h</option>
+                <option value="3">3h</option>
+                <option value="4" selected>4h</option>
+                <option value="5">5h</option>
+                <option value="6">6h</option>
+                <option value="7">7h</option>
+                <option value="8">8h</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Minutos</label>
+              <select id="minutosSelect" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 text-lg bg-white">
+                <option value="0" selected>00 min</option>
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="45">45 min</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div>
@@ -88,7 +107,7 @@
               <th class="p-3">Fecha / Hora</th>
               <th class="p-3">Login</th>
               <th class="p-3">Puesto</th>
-              <th class="p-3">Horas</th>
+              <th class="p-3">Tiempo Total</th>
               <th class="p-3">Notas</th>
             </tr>
           </thead>
@@ -122,16 +141,40 @@
       }
     }
 
+    function formatearTiempo(horas, minutos) {
+      const h = parseInt(horas) || 0;
+      const m = parseInt(minutos) || 0;
+      if (h === 0 && m === 0) return "0 min";
+      let res = "";
+      if (h > 0) res += `${h}h `;       if (m > 0) res += `${m}m`;
+      return res.trim();
+    }
+
     document.getElementById('rotacionForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('btnSubmit');
       btn.disabled = true;
       btn.textContent = "Guardando...";
 
+      const h = parseInt(document.getElementById('horasSelect').value) || 0;
+      const m = parseInt(document.getElementById('minutosSelect').value) || 0;
+
+      if (h === 0 && m === 0) {
+        const mensaje = document.getElementById('mensaje');
+        mensaje.className = "mt-4 p-4 rounded-xl text-center bg-amber-100 text-amber-800 border border-amber-300";
+        mensaje.textContent = "⚠️ Debes seleccionar una duración mayor a 0 minutos.";
+        mensaje.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = "📌 Guardar Rotación";
+        return;
+      }
+
+      const textoTiempo = formatearTiempo(h, m);
+
       const payload = {
         login: document.getElementById('login').value.trim().toLowerCase(),
         puesto: document.getElementById('puesto').value,
-        horas: parseInt(document.getElementById('horas').value),
+        horas: (h + m / 60).toFixed(2), // Guarda el valor en horas decimales para cálculos
         notas: document.getElementById('notas').value.trim()
       };
 
@@ -144,8 +187,10 @@
         mensaje.textContent = "❌ Error al guardar: " + error.message;
       } else {
         mensaje.className = "mt-4 p-4 rounded-xl text-center bg-green-100 text-green-800 border border-green-300";
-        mensaje.textContent = "✅ ¡Rotación registrada con éxito!";
+        mensaje.textContent = `✅ ¡Rotación registrada (${textoTiempo})!`;
         document.getElementById('rotacionForm').reset();
+        document.getElementById('horasSelect').value = "4";
+        document.getElementById('minutosSelect').value = "0";
       }
       mensaje.classList.remove('hidden');
       btn.disabled = false;
@@ -172,35 +217,16 @@
 
       registrosGlobales.forEach(item => {
         const fecha = new Date(item.created_at).toLocaleString("es-ES");
+        
+        const decimalHoras = parseFloat(item.horas) || 0;
+        const h = Math.floor(decimalHoras);
+        const m = Math.round((decimalHoras - h) * 60);
+        const tiempoTexto = formatearTiempo(h, m);
+
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-50";
         tr.innerHTML = `
           <td class="p-3 text-slate-600">${fecha}</td>
           <td class="p-3 font-semibold font-mono text-slate-900 uppercase">${item.login}</td>
           <td class="p-3"><span class="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-md font-medium text-xs">${item.puesto}</span></td>
-          <td class="p-3 font-bold">${item.horas} h</td>
-          <td class="p-3 text-slate-500">${item.notas || '-'}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function descargarExcel() {
-      if (!registrosGlobales.length) return alert("No hay datos cargados para exportar.");
-
-      const datosExcel = registrosGlobales.map(r => ({
-        "Fecha / Hora": new Date(r.created_at).toLocaleString("es-ES"),
-        "Login": r.login.toUpperCase(),
-        "Puesto": r.puesto,
-        "Horas": r.horas,
-        "Notas": r.notas || ""
-      }));
-
-      const hoja = XLSX.utils.json_to_sheet(datosExcel);
-      const libro = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(libro, hoja, "Rotaciones");
-      XLSX.writeFile(libro, `Informe_Rotaciones_${new Date().toISOString().slice(0,10)}.xlsx`);
-    }
-  </script>
-</body>
-</html>
+          <td class="p-3 font-bold text-slate-800">${tiempoTexto}
