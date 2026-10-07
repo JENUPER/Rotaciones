@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Rotaciones de Puestos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+  <!-- Navegación -->
+  <nav class="bg-slate-900 text-white p-4 shadow-md flex justify-between items-center max-w-4xl mx-auto rounded-b-2xl">
+    <h1 class="font-bold text-lg flex items-center gap-2">🔄 <span>Rotaciones Puestos</span></h1>
+    <div class="space-x-2">
+      <button type="button" onclick="verVista('fichaje')" class="px-3 py-1.5 bg-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-500 transition">Móvil (Fichar)</button>
+      <button type="button" onclick="verVista('admin')" class="px-3 py-1.5 bg-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-600 transition">Panel PC (Excel)</button>
+    </div>
+  </nav>
+
+  <main class="max-w-4xl mx-auto p-4">
+
+    <!-- VISTA MÓVIL: FICHAJE -->
+    <div id="vistaFichaje" class="bg-white rounded-2xl shadow-xl p-6 max-w-md mx-auto mt-4">
+      <h2 class="text-xl font-bold text-center text-slate-800 mb-4">📌 Registrar Rotación</h2>
+
+      <form id="rotacionForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Login del Trabajador</label>
+          <input type="text" id="login" required placeholder="Ej: loginID" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 text-lg uppercase font-mono" autocomplete="off">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Puesto de Trabajo</label>
+          <select id="puesto" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 text-lg bg-white">
+            <option value="">Selecciona puesto...</option>
+            <option value="Stower">Stower</option>
+            <option value="Crash">Crash</option>
+            <option value="Spider">Spider</option>
+            <option value="Picker">Picker</option>
+            <option value="Pusher">Pusher</option>
+            <option value="Straightener">Straightener</option>
+            <option value="Team Lift">Team Lift</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Horas en el puesto</label>
+          <select id="horas" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 text-lg bg-white">
+            <option value="4">4 Horas</option>
+            <option value="2">2 Horas</option>
+            <option value="1">1 Hora</option>
+            <option value="8">Turno Completo (8h)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Notas / Observaciones (Opcional)</label>
+          <input type="text" id="notas" placeholder="Ej: Cambio de línea / Incidencia" class="w-full p-3 border rounded-xl">
+        </div>
+
+        <button type="submit" id="btnSubmit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg text-lg transition">
+          📌 Guardar Rotación
+        </button>
+      </form>
+
+      <div id="mensaje" class="hidden mt-4 p-4 rounded-xl text-center font-semibold"></div>
+    </div>
+
+    <!-- VISTA PC: ADMIN & DESCARGA EXCEL -->
+    <div id="vistaAdmin" class="hidden bg-white rounded-2xl shadow-xl p-6 mt-4">
+      <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-800">📊 Informe Centralizado de Rotaciones</h2>
+          <p class="text-sm text-slate-500">Historial de fichajes de todos los logins para exportar a Excel</p>
+        </div>
+        <button type="button" onclick="descargarExcel()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-5 py-3 rounded-xl shadow-md flex items-center gap-2 transition">
+          📥 Descargar Excel (.xlsx)
+        </button>
+      </div>
+
+      <!-- Tabla de Registros -->
+      <div class="overflow-x-auto border rounded-xl">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-100 text-slate-700 border-b">
+              <th class="p-3">Fecha / Hora</th>
+              <th class="p-3">Login</th>
+              <th class="p-3">Puesto</th>
+              <th class="p-3">Horas</th>
+              <th class="p-3">Notas</th>
+            </tr>
+          </thead>
+          <tbody id="tablaCuerpo" class="divide-y text-sm">
+            <tr><td colspan="5" class="p-4 text-center text-slate-400">Cargando datos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // ⚠️ PEGA AQUÍ TUS DOS CLAVES DE SUPABASE
+    const SUPABASE_URL = "TU_SUPABASE_URL_AQUI";
+    const SUPABASE_KEY = "TU_SUPABASE_ANON_KEY_AQUI";
+    
+    let db = null;
+    if (typeof supabase !== 'undefined' && SUPABASE_URL !== "TU_SUPABASE_URL_AQUI") {
+      db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    }
+
+    let registrosGlobales = [];
+
+    function verVista(vista) {
+      const fichaje = document.getElementById('vistaFichaje');
+      const admin = document.getElementById('vistaAdmin');
+      if (vista === 'fichaje') {
+        fichaje.classList.remove('hidden');
+        admin.classList.add('hidden');
+      } else {
+        fichaje.classList.add('hidden');
+        admin.classList.remove('hidden');
+        cargarDatosAdmin();
+      }
+    }
+
+    document.getElementById('rotacionForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = true;
+      btn.textContent = "Guardando...";
+
+      const payload = {
+        login: document.getElementById('login').value.trim().toLowerCase(),
+        puesto: document.getElementById('puesto').value,
+        horas: parseInt(document.getElementById('horas').value),
+        notas: document.getElementById('notas').value.trim()
+      };
+
+      const mensaje = document.getElementById('mensaje');
+      
+      if (!db) {
+        mensaje.className = "mt-4 p-4 rounded-xl text-center bg-yellow-100 text-yellow-800 border border-yellow-300";
+        mensaje.textContent = "⚠️ Recuerda sustituir TU_SUPABASE_URL_AQUI y TU_SUPABASE_ANON_KEY_AQUI en el código.";
+        mensaje.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = "📌 Guardar Rotación";
+        return;
+      }
+
+      const { data, error } = await db.from('rotaciones').insert([payload]);
+
+      if (error) {
+        mensaje.className = "mt-4 p-4 rounded-xl text-center bg-red-100 text-red-800 border border-red-300";
+        mensaje.textContent = "❌ Error al guardar: " + error.message;
+      } else {
+        mensaje.className = "mt-4 p-4 rounded-xl text-center bg-green-100 text-green-800 border border-green-300";
+        mensaje.textContent = "✅ ¡Rotación registrada con éxito!";
+        document.getElementById('rotacionForm').reset();
+      }
+      mensaje.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = "📌 Guardar Rotación";
+      setTimeout(() => mensaje.classList.add('hidden'), 4000);
+    });
+
+    async function cargarDatosAdmin() {
+      const tbody = document.getElementById('tablaCuerpo');
+      if (!db) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-yellow-600">Reemplaza las claves de Supabase en el código para ver los datos.</td></tr>`;
+        return;
+      }
+
+      const { data, error } = await db.from('rotaciones').select('*').order('created_at', { ascending: false });
+      if (error) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Error al cargar datos: ${error.message}</td></tr>`;
+        return;
+      }
+      
+      registrosGlobales = data || [];
+      tbody.innerHTML = "";
+
+      if (registrosGlobales.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">No hay registros guardados aún.</td></tr>`;
+        return;
+      }
+
+      registrosGlobales.forEach(item => {
+        const fecha = new Date(item.created_at).toLocaleString("es-ES");
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50";
+        tr.innerHTML = `
+          <td class="p-3 text-slate-600">${fecha}</td>
+          <td class="p-3 font-semibold font-mono text-slate-900 uppercase">${item.login}</td>
+          <td class="p-3"><span class="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-md font-medium text-xs">${item.puesto}</span></td>
+          <td class="p-3 font-bold">${item.horas} h</td>
+          <td class="p-3 text-slate-500">${item.notas || '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function descargarExcel() {
+      if (!registrosGlobales.length) return alert("No hay datos cargados para exportar.");
+
+      const datosExcel = registrosGlobales.map(r => ({
+        "Fecha / Hora": new Date(r.created_at).toLocaleString("es-ES"),
+        "Login": r.login.toUpperCase(),
+        "Puesto": r.puesto,
+        "Horas": r.horas,
+        "Notas": r.notas || ""
+      }));
+
+      const hoja = XLSX.utils.json_to_sheet(datosExcel);
+      const libro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(libro, hoja, "Rotaciones");
+      XLSX.writeFile(libro, `Informe_Rotaciones_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+  </script>
+</body>
+</html>
