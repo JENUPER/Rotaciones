@@ -15,7 +15,7 @@
     <h1 class="font-bold text-lg flex items-center gap-2">🔄 <span>Rotaciones Puestos</span></h1>
     <div class="space-x-2">
       <button type="button" onclick="verVista('fichaje')" class="px-3 py-1.5 bg-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-500 transition">Móvil (Fichar)</button>
-      <button type="button" onclick="verVista('admin')" class="px-3 py-1.5 bg-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-600 transition">Panel PC (Excel)</button>
+      <button type="button" onclick="accederAdmin()" class="px-3 py-1.5 bg-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-600 transition">🔒 Panel PC (Excel)</button>
     </div>
   </nav>
 
@@ -125,8 +125,27 @@
     const SUPABASE_URL = "https://zlysetlwclejxetktkdv.supabase.co";
     const SUPABASE_KEY = "sb_publishable_m9OD3RvuuoZb6ZYZzpywAg_9AkG-HPH";
     
+    // 🔑 CONTRASENA PARA EL PANEL DE ADMINISTRADOR / EXCEL
+    const CLAVE_ADMIN = "amazonexplota"; // Cambia este valor por la contraseña que quieras
+    let adminAutenticado = false;
+
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     let registrosGlobales = [];
+
+    function accederAdmin() {
+      if (adminAutenticado) {
+        verVista('admin');
+        return;
+      }
+
+      const pass = prompt("🔐 Introduce la contraseña de Administrador para ver los datos:");
+      if (pass === CLAVE_ADMIN) {
+        adminAutenticado = true;
+        verVista('admin');
+      } else if (pass !== null) {
+        alert("❌ Contraseña incorrecta. Acceso denegado.");
+      }
+    }
 
     function verVista(vista) {
       const fichaje = document.getElementById('vistaFichaje');
@@ -146,7 +165,8 @@
       const m = parseInt(minutos) || 0;
       if (h === 0 && m === 0) return "0 min";
       let res = "";
-      if (h > 0) res += `${h}h `;       if (m > 0) res += `${m}m`;
+      if (h > 0) res += `${h}h `;
+      if (m > 0) res += `${m}m`;
       return res.trim();
     }
 
@@ -174,7 +194,7 @@
       const payload = {
         login: document.getElementById('login').value.trim().toLowerCase(),
         puesto: document.getElementById('puesto').value,
-        horas: (h + m / 60).toFixed(2), // Guarda el valor en horas decimales para cálculos
+        horas: (h + m / 60).toFixed(2),
         notas: document.getElementById('notas').value.trim()
       };
 
@@ -229,4 +249,36 @@
           <td class="p-3 text-slate-600">${fecha}</td>
           <td class="p-3 font-semibold font-mono text-slate-900 uppercase">${item.login}</td>
           <td class="p-3"><span class="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-md font-medium text-xs">${item.puesto}</span></td>
-          <td class="p-3 font-bold text-slate-800">${tiempoTexto}
+          <td class="p-3 font-bold text-slate-800">${tiempoTexto}</td>
+          <td class="p-3 text-slate-500">${item.notas || '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function descargarExcel() {
+      if (!registrosGlobales.length) return alert("No hay datos cargados para exportar.");
+
+      const datosExcel = registrosGlobales.map(r => {
+        const decimalHoras = parseFloat(r.horas) || 0;
+        const h = Math.floor(decimalHoras);
+        const m = Math.round((decimalHoras - h) * 60);
+
+        return {
+          "Fecha / Hora": new Date(r.created_at).toLocaleString("es-ES"),
+          "Login": r.login.toUpperCase(),
+          "Puesto": r.puesto,
+          "Tiempo": formatearTiempo(h, m),
+          "Horas Decimales": decimalHoras,
+          "Notas": r.notas || ""
+        };
+      });
+
+      const hoja = XLSX.utils.json_to_sheet(datosExcel);
+      const libro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(libro, hoja, "Rotaciones");
+      XLSX.writeFile(libro, `Informe_Rotaciones_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+  </script>
+</body>
+</html>
