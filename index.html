@@ -102,15 +102,11 @@
   </main>
 
   <script>
-    // ⚠️ PEGA AQUÍ TUS DOS CLAVES DE SUPABASE
-    const SUPABASE_URL = "TU_SUPABASE_URL_AQUI";
-    const SUPABASE_KEY = "TU_SUPABASE_ANON_KEY_AQUI";
+    // Configuración con tus claves de Supabase
+    const SUPABASE_URL = "https://zlysetlwclejxetktkdv.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_m9OD3RvuuoZb6ZYZzpywAg_9AkG-HPH";
     
-    let db = null;
-    if (typeof supabase !== 'undefined' && SUPABASE_URL !== "TU_SUPABASE_URL_AQUI") {
-      db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    }
-
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     let registrosGlobales = [];
 
     function verVista(vista) {
@@ -140,15 +136,6 @@
       };
 
       const mensaje = document.getElementById('mensaje');
-      
-      if (!db) {
-        mensaje.className = "mt-4 p-4 rounded-xl text-center bg-yellow-100 text-yellow-800 border border-yellow-300";
-        mensaje.textContent = "⚠️ Recuerda sustituir TU_SUPABASE_URL_AQUI y TU_SUPABASE_ANON_KEY_AQUI en el código.";
-        mensaje.classList.remove('hidden');
-        btn.disabled = false;
-        btn.textContent = "📌 Guardar Rotación";
-        return;
-      }
 
       const { data, error } = await db.from('rotaciones').insert([payload]);
 
@@ -168,10 +155,6 @@
 
     async function cargarDatosAdmin() {
       const tbody = document.getElementById('tablaCuerpo');
-      if (!db) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-yellow-600">Reemplaza las claves de Supabase en el código para ver los datos.</td></tr>`;
-        return;
-      }
 
       const { data, error } = await db.from('rotaciones').select('*').order('created_at', { ascending: false });
       if (error) {
