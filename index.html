@@ -125,8 +125,7 @@
     const SUPABASE_URL = "https://zlysetlwclejxetktkdv.supabase.co";
     const SUPABASE_KEY = "sb_publishable_m9OD3RvuuoZb6ZYZzpywAg_9AkG-HPH";
     
-    // 🔑 CONTRASENA PARA EL PANEL DE ADMINISTRADOR / EXCEL
-    const CLAVE_ADMIN = "amazonexplota"; // Cambia este valor por la contraseña que quieras
+    const CLAVE_ADMIN = "1234";
     let adminAutenticado = false;
 
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -160,10 +159,16 @@
       }
     }
 
-    function formatearTiempo(horas, minutos) {
-      const h = parseInt(horas) || 0;
-      const m = parseInt(minutos) || 0;
-      if (h === 0 && m === 0) return "0 min";
+    function convertirMinutosATexto(totalMinutos) {
+      const num = parseInt(totalMinutos) || 0;
+      if (num <= 0) return "0 min";
+      
+      // Si el valor guardado antes era en horas (ej: 4, 8, etc.)
+      const minsTotales = num < 20 ? num * 60 : num;
+      
+      const h = Math.floor(minsTotales / 60);
+      const m = minsTotales % 60;
+      
       let res = "";
       if (h > 0) res += `${h}h `;
       if (m > 0) res += `${m}m`;
@@ -178,8 +183,9 @@
 
       const h = parseInt(document.getElementById('horasSelect').value) || 0;
       const m = parseInt(document.getElementById('minutosSelect').value) || 0;
+      const totalMinutos = (h * 60) + m;
 
-      if (h === 0 && m === 0) {
+      if (totalMinutos === 0) {
         const mensaje = document.getElementById('mensaje');
         mensaje.className = "mt-4 p-4 rounded-xl text-center bg-amber-100 text-amber-800 border border-amber-300";
         mensaje.textContent = "⚠️ Debes seleccionar una duración mayor a 0 minutos.";
@@ -189,12 +195,13 @@
         return;
       }
 
-      const textoTiempo = formatearTiempo(h, m);
+      const textoTiempo = convertirMinutosATexto(totalMinutos);
 
+      // Enviamos un número entero (total de minutos) para ser 100% compatible con la columna INT de Postgres
       const payload = {
         login: document.getElementById('login').value.trim().toLowerCase(),
         puesto: document.getElementById('puesto').value,
-        horas: (h + m / 60).toFixed(2),
+        horas: totalMinutos,
         notas: document.getElementById('notas').value.trim()
       };
 
@@ -237,11 +244,7 @@
 
       registrosGlobales.forEach(item => {
         const fecha = new Date(item.created_at).toLocaleString("es-ES");
-        
-        const decimalHoras = parseFloat(item.horas) || 0;
-        const h = Math.floor(decimalHoras);
-        const m = Math.round((decimalHoras - h) * 60);
-        const tiempoTexto = formatearTiempo(h, m);
+        const tiempoTexto = convertirMinutosATexto(item.horas);
 
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-50";
@@ -260,16 +263,17 @@
       if (!registrosGlobales.length) return alert("No hay datos cargados para exportar.");
 
       const datosExcel = registrosGlobales.map(r => {
-        const decimalHoras = parseFloat(r.horas) || 0;
-        const h = Math.floor(decimalHoras);
-        const m = Math.round((decimalHoras - h) * 60);
+        const num = parseInt(r.horas) || 0;
+        const minsTotales = num < 20 ? num * 60 : num;
+        const horasDecimales = (minsTotales / 60).toFixed(2);
 
         return {
           "Fecha / Hora": new Date(r.created_at).toLocaleString("es-ES"),
           "Login": r.login.toUpperCase(),
           "Puesto": r.puesto,
-          "Tiempo": formatearTiempo(h, m),
-          "Horas Decimales": decimalHoras,
+          "Tiempo": convertirMinutosATexto(r.horas),
+          "Horas (Decimal)": parseFloat(horasDecimales),
+          "Minutos Totales": minsTotales,
           "Notas": r.notas || ""
         };
       });
